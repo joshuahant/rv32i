@@ -78,7 +78,7 @@ struct PipelineConfig {
     bool     trace_pipeline = false; // print full pipeline state each cycle
     bool     btb_enable     = false; // enable branch target buffer
     uint32_t btb_size       = 256;  // entries (must be power of 2)
-    uint64_t max_cycles     = 100'000'000ULL;
+    uint64_t max_cycles     = 400'000'000ULL;
 };
 
 // ─── Core ─────────────────────────────────────────────────────────────────────

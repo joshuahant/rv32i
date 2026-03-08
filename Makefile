@@ -8,7 +8,7 @@ RM = rm -rf
 CXX      := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -O2
 
-.PHONY: tb sim-test sim-run core-sim riscv-tests riscv-tests-build clean-tests
+.PHONY: tb sim-test sim-run core-sim riscv-tests riscv-tests-build clean-tests bench-build bench-run bench-experiment
 
 all: tb run
 
@@ -92,4 +92,30 @@ riscv-tests: core-sim
 
 clean-tests:
 	$(RM) $(RV32UI_OUT)
+
+# ── Benchmark ─────────────────────────────────────────────────────────────────
+
+BENCH_DIR     := tests/benchmarks
+BENCH_CXX     := riscv64-unknown-elf-g++
+# libgcc provides __mulsi3 (software multiply) needed for RV32I without M extension.
+BENCH_LIBGCC  := $(shell riscv64-unknown-elf-gcc -march=$(RISCV_MARCH) -mabi=$(RISCV_ABI) -print-libgcc-file-name 2>/dev/null)
+BENCH_FLAGS   := -march=$(RISCV_MARCH) -mabi=$(RISCV_ABI) \
+                 -static -mcmodel=medany \
+                 -fvisibility=hidden -nostdlib -nostartfiles \
+                 -fno-exceptions -fno-rtti -O2 \
+                 -Wl,--no-warn-rwx-segments \
+                 -T$(BENCH_DIR)/link.ld
+
+bench-build:
+	$(BENCH_CXX) $(BENCH_FLAGS) \
+	    $(BENCH_DIR)/crt0.S $(BENCH_DIR)/benchmark.cpp \
+	    $(BENCH_LIBGCC) \
+	    -o $(BENCH_DIR)/matmul
+
+bench-run: core-sim bench-build
+	./$(BUILD_DIR)/core_sim $(BENCH_DIR)/matmul
+
+bench-experiment: core-sim bench-build
+	mkdir -p results
+	./scripts/cache_experiment.sh -o results/matmul.tsv $(BENCH_DIR)/matmul
 
