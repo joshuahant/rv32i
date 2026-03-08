@@ -62,21 +62,23 @@ configs=(
 # ── Output file setup ─────────────────────────────────────────────────────────
 # Write a TSV header if an output file was requested.
 if [ -n "$OUTPUT_FILE" ]; then
-    printf 'config\tcycles\tinstrs\tipc\ti_stalls\td_stalls\tpass\ttotal\n' \
+    printf 'config\tcycles\tinstrs\tipc\ti_stalls\td_stalls\tl1i_misses\tl1d_misses\tl2_misses\tpass\ttotal\n' \
         > "$OUTPUT_FILE"
 fi
 
 # Helper: emit one result row to stdout (formatted) and optionally to the file.
 emit_row() {
     local label="$1" cycles="$2" instrs="$3" ipc="$4" \
-          i_stall="$5" d_stall="$6" pass="$7" total="$8"
+          i_stall="$5" d_stall="$6" l1i_m="$7" l1d_m="$8" l2_m="$9" \
+          pass="${10}" total="${11}"
 
     printf "%-20s  %10d  %10d  %6s  %10d  %10d  %d/%d\n" \
         "$label" "$cycles" "$instrs" "$ipc" "$i_stall" "$d_stall" "$pass" "$total"
 
     if [ -n "$OUTPUT_FILE" ]; then
-        printf '%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\n' \
-            "$label" "$cycles" "$instrs" "$ipc" "$i_stall" "$d_stall" "$pass" "$total" \
+        printf '%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n' \
+            "$label" "$cycles" "$instrs" "$ipc" "$i_stall" "$d_stall" \
+            "$l1i_m" "$l1d_m" "$l2_m" "$pass" "$total" \
             >> "$OUTPUT_FILE"
     fi
 }
@@ -101,6 +103,9 @@ for cfg_entry in "${configs[@]}"; do
     total_instrs=0
     total_i_stall=0
     total_d_stall=0
+    total_l1i_misses=0
+    total_l1d_misses=0
+    total_l2_misses=0
     pass=0
     fail=0
 
@@ -119,10 +124,19 @@ for cfg_entry in "${configs[@]}"; do
         is=$(echo "$out" | grep -oP 'I\$ stall cycles:\s+\K[0-9]+'   | head -1)
         ds=$(echo "$out" | grep -oP 'D\$ stall cycles:\s+\K[0-9]+'   | head -1)
 
+        # Extract miss counts per cache level.
+        # L2 appears in both icache and dcache hierarchy output; awk sums all occurrences.
+        l1i_m=$(echo "$out" | awk 'index($0,"=== L1-I$"){f=1} f && index($0,"  Misses:"){match($0,/[0-9]+/); print substr($0,RSTART,RLENGTH); f=0}')
+        l1d_m=$(echo "$out" | awk 'index($0,"=== L1-D$"){f=1} f && index($0,"  Misses:"){match($0,/[0-9]+/); print substr($0,RSTART,RLENGTH); f=0}')
+        l2_m=$(echo  "$out" | awk 'index($0,"=== L2"){f=1}    f && index($0,"  Misses:"){match($0,/[0-9]+/); s+=substr($0,RSTART,RLENGTH); f=0} END{print s+0}')
+
         total_cycles=$(( total_cycles + ${c:-0} ))
         total_instrs=$(( total_instrs + ${i:-0} ))
         total_i_stall=$(( total_i_stall + ${is:-0} ))
         total_d_stall=$(( total_d_stall + ${ds:-0} ))
+        total_l1i_misses=$(( total_l1i_misses + ${l1i_m:-0} ))
+        total_l1d_misses=$(( total_l1d_misses + ${l1d_m:-0} ))
+        total_l2_misses=$(( total_l2_misses + ${l2_m:-0} ))
 
         if echo "$out" | grep -q '\[sim\] PASS'; then
             pass=$(( pass + 1 ))
@@ -138,7 +152,9 @@ for cfg_entry in "${configs[@]}"; do
     fi
 
     emit_row "$label" "$total_cycles" "$total_instrs" "$ipc" \
-             "$total_i_stall" "$total_d_stall" "$pass" "$(( pass + fail ))"
+             "$total_i_stall" "$total_d_stall" \
+             "$total_l1i_misses" "$total_l1d_misses" "$total_l2_misses" \
+             "$pass" "$(( pass + fail ))"
 done
 
 printf "\n"

@@ -195,7 +195,7 @@ It can also be run directly on any ELF:
 ./scripts/cache_experiment.sh -o results/out.tsv <elf>
 ```
 
-The `-o FILE` option writes tab-separated results (config, cycles, instrs, IPC, I$-stalls, D$-stalls, pass/total) alongside the formatted stdout table.
+The `-o FILE` option writes tab-separated results (config, cycles, instrs, IPC, I$-stalls, D$-stalls, L1-I$ misses, L1-D$ misses, L2 misses, pass/total) alongside the formatted stdout table.
 
 ---
 
